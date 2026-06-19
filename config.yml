@@ -1,0 +1,26 @@
+# Hippocampus Configuration
+# AI Bionic Memory System — V0.1
+
+hippocampus:
+  data_dir: "./data"
+
+  short_term:
+    # Maximum number of entries in short-term memory
+    window_size: 50
+    # When entry count exceeds this, compression is triggered
+    compression_threshold: 40
+
+  long_term:
+    # Default Top-K for semantic search
+    top_k: 5
+    # Chroma collection name
+    collection_name: "hippocampus_ltm"
+    # Embedding model (uses Chroma's default if blank)
+    # Options: "chroma_default" | "tfidf" (no-download fallback)
+    embedding_backend: "tfidf"
+
+  working:
+    file: "working.json"
+
+  # Unique ID prefix
+  id_prefix: "hippo"

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hippocampus"
+version = "0.1.0"
+description = "AI Bionic Memory System — three-layer memory architecture"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "小狐 (VixieTodd)"},
+]
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0",
+    "chromadb>=0.4.0",  # optional — TF-IDF fallback works without it
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+hippo = "hippocampus.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["hippocampus*"]
