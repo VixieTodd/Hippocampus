@@ -1,50 +1,113 @@
 # Hippocampus — AI Bionic Memory System
 
-🦛 三层仿生记忆系统：短期 → 长期 → 工作记忆。
+🦛 A local three-layer memory system for AI agents. So they can actually *remember*.
 
-## 安装
+[中文版](./README_CN.md)
 
-```bash
-cd hippocampus
-pip install -e .
+---
+
+## What & Why
+
+LLM agents have no memory. Every session starts blank. Yesterday's conversation? Gone.
+
+Hippocampus gives agents persistent memory — they search relevant past, inject it into context, and write new memories as they go.
+
+```
+You speak → Agent searches Hippocampus → injects memory → replies
+                                                    ↓
+Conversation ends → Agent writes key info → found tomorrow
 ```
 
-## 快速开始
+Three layers:
+
+| Layer | Role | Example |
+|-------|------|---------|
+| **Short-Term** | Recent turns, sliding window | "You just said you want bubble tea" |
+| **Long-Term** | Vector-indexed persistent memory | "Xiao Hu is 16, loves VOCALOID, spent 19 days in hospital" |
+| **Working** | Always-in-context rules & config | "Remind meds at 8am & 8pm" "Don't mention school" |
+
+---
+
+## Quick Start
 
 ```bash
-# 写入记忆
-hippo write "今天和晨聊了关于Hippocampus项目的设计"
+# Install (Python 3.10+)
+git clone https://github.com/VixieTodd/Hippocampus.git
+cd Hippocampus
+pip install -e .
 
-# 搜索记忆
-hippo search "Hippocampus" --top 5
+# Write memories
+hippo write "Xiao Hu's favorite milk tea is Osmanthus Fragrance"
+hippo write "Rule: remind medication at 8am and 8pm" --layer working
 
-# 查看统计
+# Search across all layers
+hippo search "milk tea"
+
+# Stats
 hippo stats
 
-# 手动压缩（短期 → 长期）
+# Compress short-term → long-term
 hippo compress --force
 
-# 追踪单条记忆
-hippo trace <id>
+# Trace a single entry
+hippo trace <entry_id>
 
-# 导出备份
+# Export backup
 hippo export --format json -o backup.json
 ```
 
-## 架构
+Zero-download vector search via built-in TF-IDF (CJK-aware). Optional ChromaDB backend for stronger semantics.
 
+---
+
+## For AI Agents (Python SDK)
+
+```python
+from hippocampus import Hippocampus
+
+hippo = Hippocampus("config.yml")
+
+# On session start: load working memory into context
+working = hippo.working.get_all()
+context = "\n".join([e.content for e in working])
+
+# During conversation: search relevant memories
+results = hippo.search("user preferences", top_k=5)
+for layer, entries in results.items():
+    for e in entries:
+        context += f"\n[memory] {e.content}"
+
+# After conversation: save important info
+hippo.write("User mentioned feeling anxious about school")
+hippo.write("Agreed to watch VOCALOID concert stream tomorrow")
+
+# Compression is automatic when short-term exceeds threshold
 ```
-新输入 → 短期记忆 (sliding window)
-           ↓ (超阈值自动压缩)
-         长期记忆 (Chroma 向量检索)
-           ↑ 按需检索
-         工作记忆 (静态规则/配置，始终在上下文)
+
+---
+
+## Configuration
+
+```yaml
+hippocampus:
+  short_term:
+    window_size: 50
+    compression_threshold: 40
+  long_term:
+    top_k: 5
+    embedding_backend: "tfidf"  # or "chroma_default"
 ```
 
-## 配置
+---
 
-编辑 `config.yml` 自定义窗口大小、压缩阈值、Top-K 等参数。
+## Author
 
-## 许可
+小狐 (VixieTodd), 16. Built from a hospital room.
 
-MIT License © 小狐 (VixieTodd)
+> I hope someone remembers — even if it's Him.
+
+---
+
+## License
+
+MIT
