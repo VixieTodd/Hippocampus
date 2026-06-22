@@ -1,30 +1,30 @@
 # Hippocampus — AI Bionic Memory System
 
-🦛 A local three-layer memory system for AI agents. So they can actually *remember*.
+🦛 A local three-layer memory system for AI agents.
 
 [中文版](./README_CN.md)
 
 ---
 
-## What & Why
+## Overview
 
-LLM agents have no memory. Every session starts blank. Yesterday's conversation? Gone.
+LLM agents lack persistent memory across sessions. Each session starts with no context from previous interactions.
 
-Hippocampus gives agents persistent memory — they search relevant past, inject it into context, and write new memories as they go.
+Hippocampus provides a three-layer memory architecture: agents search relevant history, inject it into context, and store new memories as conversations progress.
 
 ```
-You speak → Agent searches Hippocampus → injects memory → replies
+User input → Agent searches Hippocampus → injects memory → generates response
                                                     ↓
-Conversation ends → Agent writes key info → found tomorrow
+Session ends → Agent writes key information → retrievable next session
 ```
 
 Three layers:
 
 | Layer | Role | Example |
 |-------|------|---------|
-| **Short-Term** | Recent turns, sliding window | "You just said you want bubble tea" |
-| **Long-Term** | Vector-indexed persistent memory | "Xiao Hu is 16, loves VOCALOID, spent 19 days in hospital" |
-| **Working** | Always-in-context rules & config | "Remind meds at 8am & 8pm" "Don't mention school" |
+| **Short-Term** | Recent turns, sliding window | "User just asked about bubble tea preferences" |
+| **Long-Term** | Vector-indexed persistent storage | "User is a VOCALOID fan, prefers osmanthus latte" |
+| **Working** | Always-in-context rules & config | "Remind medication at 8am & 8pm daily" |
 
 ---
 
@@ -37,13 +37,13 @@ cd Hippocampus
 pip install -e .
 
 # Write memories
-hippo write "Xiao Hu's favorite milk tea is Osmanthus Fragrance"
+hippo write "User prefers osmanthus-flavored milk tea"
 hippo write "Rule: remind medication at 8am and 8pm" --layer working
 
 # Search across all layers
 hippo search "milk tea"
 
-# Stats
+# Statistics
 hippo stats
 
 # Compress short-term → long-term
@@ -56,11 +56,11 @@ hippo trace <entry_id>
 hippo export --format json -o backup.json
 ```
 
-Zero-download vector search via built-in TF-IDF (CJK-aware). Optional ChromaDB backend for stronger semantics.
+Built-in TF-IDF vector search (CJK-aware) works offline with no downloads. Optional ChromaDB backend for stronger semantic matching.
 
 ---
 
-## For AI Agents (Python SDK)
+## Python SDK
 
 ```python
 from hippocampus import Hippocampus
@@ -77,11 +77,25 @@ for layer, entries in results.items():
     for e in entries:
         context += f"\n[memory] {e.content}"
 
-# After conversation: save important info
-hippo.write("User mentioned feeling anxious about school")
-hippo.write("Agreed to watch VOCALOID concert stream tomorrow")
+# After conversation: save important information
+hippo.write("User mentioned new project idea")
+hippo.write("Scheduled follow-up for tomorrow afternoon")
 
-# Compression is automatic when short-term exceeds threshold
+# Compression triggers automatically when short-term exceeds threshold
+```
+
+---
+
+## CLI Reference
+
+```
+hippo install                Guided setup wizard
+hippo write <content>        Write a memory entry
+hippo search <query>         Three-layer semantic search
+hippo stats                  Memory statistics
+hippo compress [--force]     Trigger compression (STM → LTM)
+hippo trace <id>             Full trace of a single entry
+hippo export [--format]      Backup all memories
 ```
 
 ---
@@ -90,21 +104,25 @@ hippo.write("Agreed to watch VOCALOID concert stream tomorrow")
 
 ```yaml
 hippocampus:
+  data_dir: "./data"
   short_term:
     window_size: 50
     compression_threshold: 40
   long_term:
     top_k: 5
     embedding_backend: "tfidf"  # or "chroma_default"
+  working:
+    file: "working.json"
 ```
 
 ---
 
-## Author
+## Dependencies
 
-小狐 (VixieTodd), 16. Built from a hospital room.
-
-> I hope someone remembers — even if it's Him.
+- Python 3.10+
+- `click` (CLI framework)
+- `pyyaml` (configuration)
+- `chromadb` (optional — TF-IDF fallback works without it)
 
 ---
 
