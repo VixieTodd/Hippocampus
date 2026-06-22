@@ -2,6 +2,7 @@
 Hippocampus CLI — command-line interface for the bionic memory system.
 
 Commands:
+  hippo install                Guided setup wizard
   hippo write <content>        Write a memory entry
   hippo search <query>         Three-layer semantic search
   hippo stats                  Memory statistics
@@ -25,6 +26,7 @@ from .memory.short_term import ShortTermMemory
 from .memory.long_term import LongTermMemory
 from .memory.working import WorkingMemory
 from .compressor import Compressor
+from .installer import run_install_wizard, auto_install
 
 
 class Hippocampus:
@@ -288,6 +290,22 @@ def trace(ctx, entry_id):
         click.echo(f"  Metadata:  {json.dumps(entry['metadata'], ensure_ascii=False)}")
     click.echo(f"  Content:")
     click.echo(f"    {entry['content']}")
+
+
+@cli.command()
+@click.option("--yes", "-y", "non_interactive", is_flag=True,
+              help="Non-interactive: migrate all and disable conflicts")
+@click.pass_context
+def install(ctx, non_interactive):
+    """Guided installation wizard — migrate memories & handle skill conflicts."""
+    if non_interactive:
+        result = auto_install(migrate=True, disable_skills_flag=True)
+        click.echo(f"[OK] Migrated {result['migrated']} entries, "
+                   f"disabled {len(result['disabled'])} skills")
+        for w in result.get("warnings", []):
+            click.echo(f"  ⚠ {w}")
+    else:
+        run_install_wizard()
 
 
 @cli.command()
