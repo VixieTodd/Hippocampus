@@ -1,0 +1,56 @@
+# Hippocampus Configuration
+# ==========================
+# All configurable parameters for the 3-layer memory system.
+
+storage:
+  # Root directory for all memory data (relative to config.yml location)
+  data_dir: "./data"
+
+# --- Short-Term Memory ---
+short_term:
+  # Max number of entries in short-term memory window
+  window_size: 100
+  # Auto-compress when window fills above this ratio (0.0-1.0)
+  compression_threshold: 0.8
+  # Storage format: json
+  format: "json"
+
+# --- Long-Term Memory ---
+long_term:
+  # Vector database backend: chroma | faiss
+  backend: "chroma"
+  # Embedding model name (sentence-transformers)
+  embedding_model: "all-MiniLM-L6-v2"
+  # Number of results to return by default
+  top_k: 5
+  # Minimum similarity score threshold (0.0-1.0)
+  min_score: 0.0
+  # ChromaDB collection name
+  collection_name: "hippocampus_long_term"
+
+# --- Compression ---
+compression:
+  # Strategy for summarizing short-term → long-term
+  # Options: simple_concat | llm_summary (future)
+  strategy: "simple_concat"
+  # Max characters per compressed entry
+  max_chars: 2000
+  # Number of short-term entries to compress at once
+  batch_size: 20
+
+# --- Working Memory (Engineering Memory) ---
+working:
+  # Static entries loaded from file on startup
+  entries_file: ""  # path to a JSON/YAML file, or empty
+
+# --- Traceability ---
+trace:
+  # Enable trace logging for every operation
+  enabled: true
+  # Trace log file (relative to data_dir)
+  log_file: "trace.log"
+
+# --- CLI ---
+cli:
+  # Default number of results for search
+  default_top_k: 5
