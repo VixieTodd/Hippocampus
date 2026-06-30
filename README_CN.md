@@ -67,14 +67,10 @@ Hippocampus 解决这个问题 —— 让 Agent 能**存得住、找得到**。
 环境要求：Python 3.10+
 
 ```bash
-# 轻量模式（默认 — 除 click + pyyaml 外零额外依赖）
 git clone https://github.com/VixieTodd/Hippocampus.git
 cd Hippocampus
 pip install -e .
 hippo install
-
-# 完整模式（可选 — 如需语义搜索）
-hippo doctor --full
 ```
 
 就这样。`hippo install` 会引导完成 4 步双语安装向导：

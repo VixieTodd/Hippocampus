@@ -67,14 +67,10 @@ Switch anytime by editing `config.yml` → `long_term.backend`. Run `hippo docto
 Requirements: Python 3.10+
 
 ```bash
-# Lite mode (default — zero extra deps beyond click + pyyaml)
 git clone https://github.com/VixieTodd/Hippocampus.git
 cd Hippocampus
 pip install -e .
 hippo install
-
-# Full mode (optional — if you want semantic search)
-hippo doctor --full
 ```
 
 That's it. `hippo install` walks through a 4-step bilingual wizard:
