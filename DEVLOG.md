@@ -106,6 +106,41 @@ $ hippo install
   导入了 19 条记忆 | 禁用了 3 个冲突 Skill
 ```
 
+---
+
+## 2026-06-30 (2) — 代码审查：注释补全 + 压缩修复 + 性能优化
+
+### 审查范围
+
+逐文件审查全部 12 个源文件，检查注释完整性、逻辑错误、性能问题。
+
+### 发现并修复的问题
+
+| # | 文件 | 问题 | 修复 |
+|---|------|------|------|
+| 1 | `config.py` | `to_dict()` 返回 `__dict__`，泄露 `_config_path` | 过滤 `_` 前缀属性 |
+| 2 | `store.py` | `export()` 硬编码 `"version": "0.1.0"` | 改为 `from hippocampus import __version__` |
+| 3 | `compressor.py` | `_concat_block` 注释说"合并"实际是 1:1 假压缩 | 实现真正的合并：多条 → 按 `max_chars` 切 chunk |
+| 4 | `tfidf_backend.py` | `add_batch()` 循环调 `add()`，每次 `_save()` | 内联实现，批量完只存一次 |
+| 5 | `long_term.py` | 未使用的 `Optional` 导入 | 移除 |
+
+### 注释补全
+
+| 文件 | 补了什么 |
+|------|----------|
+| `layers/short_term.py` | 搜索评分公式 `* 0.8 + 0.2` 的设计意图 |
+| `layers/tfidf_backend.py` | `_PUNCT_RE` 覆盖的标点范围说明 |
+| `layers/long_term.py` | `_init_tfidf()` docstring |
+| `cli.py` | `_ask_yn`、`_find_all_skills`、`_find_memory_files` docstring |
+| `cli.py` | install 后端选择段分叉说明（Lite/Full） |
+| `cli.py` | 数据导入段说明（逐行导入逻辑） |
+
+### 测试结果
+
+回归测试全部通过：write+search、stats、trace、export version、compress（10→1）、config to_dict 无泄露。
+
+---
+
 ## 2026-06-30 — 双后端架构 (TF-IDF Lite + ChromaDB Full)
 
 ### 需求来源

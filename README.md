@@ -2,7 +2,7 @@
 
 # Hippocampus 🧠 — A Bionic Memory System for AI
 
-> Persistent memory for your LLM agent — three-layer architecture with vector retrieval.
+> Persistent memory for your LLM agent — three-layer architecture with switchable backends.
 
 The **hippocampus** in the human brain handles memory formation, storage, and retrieval — converting short-term memories into long-term ones.
 **Hippocampus** draws inspiration from this, providing a structured persistent memory system for AI agents.
@@ -19,7 +19,7 @@ Hippocampus fixes that — letting agents **store what matters and find it later
 
 ---
 
-## Three-Layer Architecture
+## Architecture
 
 ```
                     ┌──────────────────────────┐
@@ -35,9 +35,9 @@ Hippocampus fixes that — letting agents **store what matters and find it later
                       ▼  (auto compression → migration)
 ┌──────────────────────────────────────────────────────┐
 │                Long-Term Memory                        │
-│  · ChromaDB vector database + cosine similarity       │
-│  · sentence-transformers embeddings                   │
-│  · Settled, compressed memories                       │
+│  · Dual backend: TF-IDF (Lite) | ChromaDB (Full)       │
+│  · CJK-aware tokenisation for Chinese/Japanese/Korean  │
+│  · Cosine similarity over sparse vectors               │
 └─────────────────────┬────────────────────────────────┘
                       ▲
            context injection on demand
@@ -51,39 +51,40 @@ Hippocampus fixes that — letting agents **store what matters and find it later
 
 ---
 
+## Backend Modes
+
+| Mode | Backend | Dependencies | Best for |
+|------|---------|-------------|----------|
+| **Lite** `(default)` | TF-IDF | Zero extra deps | <10K docs, quick start |
+| **Full** | ChromaDB + embeddings | ~300 MB | Semantic search, large scale |
+
+Switch anytime by editing `config.yml` → `long_term.backend`. Run `hippo doctor --full` to install Full-mode deps.
+
+---
+
 ## Quick Start
 
 Requirements: Python 3.10+
 
 ```bash
-pip install chromadb sentence-transformers pyyaml click
+# Lite mode (default — zero extra deps beyond click + pyyaml)
 git clone https://github.com/VixieTodd/Hippocampus.git
 cd Hippocampus
 pip install -e .
+hippo install
+
+# Full mode (optional — if you want semantic search)
+hippo doctor --full
 ```
 
----
-
-## Setup Wizard
-
-Run `hippo install` for a guided setup:
+That's it. `hippo install` walks through a 4-step bilingual wizard:
 
 ```
-[1/3] Environment check
-   ✓ Python version
-   ✓ Runtime dependencies
-   ✓ OpenClaw workspace
-
-[2/3] Skill conflict check
-   Scans existing skills, asks whether to disable conflicting ones
-
-[3/3] Import data
-   Detects existing memory files (e.g. MEMORY.md), asks whether to import
+[1/4] Environment check  →  Python + core deps
+[2/4] Backend selection  →  [1] Lite (TF-IDF)  /  [2] Full (ChromaDB)
+[3/4] Skill conflicts    →  Scan existing skills, optionally disable
+[4/4] Import data        →  MEMORY.md → Hippocampus
 ```
-
-The wizard supports Chinese and English. If dependencies are missing, you can choose auto-install or manual install.
-
-Run `hippo doctor` to check dependency status independently.
 
 ---
 
@@ -104,7 +105,7 @@ results = store.search("<query>", top_k=<N>)
 for r in results:
     print(f"[{r.layer}] (score={r.score}) {r.content[:80]}")
 
-# View statistics
+# View statistics (shows active backend)
 print(store.stats())
 
 # Manual compression
@@ -117,11 +118,11 @@ store.compress(force=<True|False>)
 
 | Command | Description |
 |---|---|
-| `hippo install` | **Setup wizard** — bilingual, env check + conflict handling + data import |
-| `hippo doctor [--install] [--dry-run]` | **Dependency check** — Python + pip packages, optional auto-install |
+| `hippo install` | **Setup wizard** — bilingual, 4-step guided setup |
+| `hippo doctor [--install] [--full] [--dry-run]` | **Dependency check** — core + full-mode status, optional auto-install |
 | `hippo write <content> [--source] [--layer]` | Write a memory entry |
 | `hippo search <query> [--top N] [--layers]` | Search memories |
-| `hippo stats` | Memory statistics for all layers |
+| `hippo stats` | Memory stats for all layers (shows backend) |
 | `hippo compress [--force]` | Trigger short-term → long-term compression |
 | `hippo trace <id>` | Full operation history for one entry |
 | `hippo export [--format json] [-o file]` | Export all memories |
@@ -130,7 +131,7 @@ store.compress(force=<True|False>)
 ### Available layers
 
 - `short_term` — Sliding window, keyword search (default)
-- `long_term` — ChromaDB vector semantic search
+- `long_term` — TF-IDF (Lite) or ChromaDB (Full), vector search
 - `working` — Static storage, never compressed
 
 ### Available sources
@@ -152,13 +153,13 @@ short_term:
   compression_threshold: 0.8
 
 long_term:
-  backend: "chroma"
-  embedding_model: "all-MiniLM-L6-v2"
+  backend: "tfidf"                   # "tfidf" (Lite) or "chroma" (Full)
+  embedding_model: "all-MiniLM-L6-v2" # Only used by chroma backend
   top_k: 5
   min_score: 0.0
 
 compression:
-  strategy: "simple_concat"
+  strategy: "simple_concat"          # Merges N short entries → fewer long chunks
   max_chars: 2000
   batch_size: 20
 
@@ -177,24 +178,24 @@ trace:
 ```
 hippocampus/
 ├── hippocampus/
-│   ├── __init__.py          # Package info
-│   ├── cli.py               # CLI entry (install / doctor / write / search, etc.)
-│   ├── deps.py              # Dependency checking and auto-install
-│   ├── config.py            # YAML config loading (typed dataclass)
-│   ├── memory.py            # MemoryEntry data model
-│   ├── store.py             # Unified store (manages all three layers)
-│   ├── compressor.py        # Short-term → long-term compression
-│   ├── tracer.py            # Operation trace log
-│   └── layers/              # Layer implementations
-│       ├── __init__.py      # BaseLayer ABC + SearchResult
-│       ├── working.py       # Working memory
-│       ├── short_term.py    # Short-term memory (keyword search, dynamic scoring)
-│       └── long_term.py     # Long-term memory (ChromaDB + sentence-transformers)
-├── tests/
+│   ├── __init__.py              # Package info
+│   ├── cli.py                   # CLI (install / doctor / write / search, etc.)
+│   ├── deps.py                  # Dependency checker + auto-install
+│   ├── config.py                # YAML config (typed dataclass)
+│   ├── memory.py                # MemoryEntry data model
+│   ├── store.py                 # Unified store (manages all 3 layers)
+│   ├── compressor.py            # ST → LT compression
+│   ├── tracer.py                # Operation trace log
+│   └── layers/
+│       ├── __init__.py          # BaseLayer ABC + SearchResult
+│       ├── working.py           # Working memory
+│       ├── short_term.py        # Short-term (keyword, dynamic scoring)
+│       ├── long_term.py         # Long-term (dual backend dispatcher)
+│       └── tfidf_backend.py     # TF-IDF backend (CJK, zero deps)
 ├── config.yml
 ├── pyproject.toml
 ├── README.md
-└── DEVLOG.md                # Development changelog
+└── DEVLOG.md                    # Development log
 ```
 
 ---
@@ -206,10 +207,10 @@ hippocampus/
 | Python | >=3.10 | Runtime | ✅ |
 | click | >=8.0 | CLI framework | ✅ |
 | pyyaml | >=6.0 | YAML config parser | ✅ |
-| chromadb | >=0.4.0 | Vector DB (long-term memory) | ✅ |
-| sentence-transformers | >=2.2.0 | Embedding model | ✅ |
+| chromadb | >=0.4.0 | Vector DB (Full mode only) | ❌ Optional |
+| sentence-transformers | >=2.2.0 | Embeddings (Full mode only) | ❌ Optional |
 
-`hippo install` will ask whether to auto-install missing dependencies.
+`hippo doctor --full` installs the optional packages for Full mode.
 
 ---
 
@@ -217,11 +218,11 @@ hippocampus/
 
 | Version | Content | Status |
 |---|---|---|
-| **V0.1** | CLI + 3-layer storage + keyword/semantic search + config + tracing | ✅ |
-| **V0.2** | Bilingual setup wizard + auto-dep check + memory migration | ✅ |
-| **V0.3** | SDK improvements, Web UI, incremental summarization | 📋 Planned |
-| **V0.4** | Adaptive forgetting, conflict detection, other runtime support | 📋 Planned |
-| **V0.5** | Memory graph, multimodal support | 📋 Planned |
+| **V0.1** | CLI + 3 layers + keyword/vector search + config + tracing | ✅ |
+| **V0.2** | Bilingual setup wizard + dep auto-check + memory migration | ✅ |
+| **V0.3** | Dual backend (TF-IDF default, ChromaDB optional) + real compression | ✅ |
+| **V0.4** | Web UI, incremental summarization, PyPI version check | 📋 Planned |
+| **V0.5** | Adaptive forgetting, conflict detection, memory graph | 📋 Planned |
 
 ---
 
