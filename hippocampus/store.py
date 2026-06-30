@@ -41,6 +41,7 @@ class MemoryStore:
         )
         self.long_term = LongTermMemoryLayer(
             data_dir,
+            backend=config.long_term.backend,
             collection_name=config.long_term.collection_name,
             embedding_model_name=config.long_term.embedding_model,
             top_k=config.long_term.top_k,

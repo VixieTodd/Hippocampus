@@ -43,6 +43,11 @@ def cli(ctx, config_path) -> None:
     """Hippocampus — A bionic memory system for AI."""
     ctx.ensure_object(dict)
 
+    # doctor / install don't need the full MemoryStore (avoids pulling in
+    # ChromaDB / sentence-transformers at --help time).
+    if ctx.invoked_subcommand in ("doctor", "install"):
+        return
+
     # Lazy import so --help is fast even without deps.
     from hippocampus.config import Config
     from hippocampus.store import MemoryStore
@@ -61,9 +66,10 @@ _L = {
     "zh": {
         "banner_title":         "Hippocampus 安装向导",
         "banner_sub":           "三层仿生记忆系统 — 为 AI Agent 提供持久记忆",
-        "step_env":             "[1/3] 环境检查",
-        "step_skill":           "[2/3] Skill 冲突检查",
-        "step_migrate":         "[3/3] 导入数据",
+        "step_env":             "[1/4] 环境检查",
+        "step_backend":         "[2/4] 选择后端",
+        "step_skill":           "[3/4] Skill 冲突检查",
+        "step_migrate":         "[4/4] 导入数据",
         "py_ok":                "Python {ver} 符合要求",
         "py_too_old":           "Python {ver} 版本过低（需要 >=3.10）",
         "py_ask":               "Python 3.10+ 是运行 Hippocampus 的必要条件。",
@@ -80,6 +86,13 @@ _L = {
         "deps_failed":          "依赖安装失败",
         "found_workspace":      "找到 OpenClaw 工作区",
         "not_found_workspace":  "未检测到 OpenClaw 工作区（暂仅支持 OpenClaw），请确认已安装并已设置工作目录。",
+        "backend_title":        "后端选择",
+        "backend_lite":         "[1] 轻量模式 (TF-IDF) — 零额外依赖，CJK 分词，适合小规模记忆",
+        "backend_full":         "[2] 完整模式 (ChromaDB) — 语义向量搜索，需安装约 300 MB 依赖",
+        "backend_lite_chosen":  "已选择：轻量模式 (TF-IDF)",
+        "backend_full_chosen":  "已选择：完整模式 (ChromaDB)",
+        "backend_full_install": "正在安装 ChromaDB + sentence-transformers...",
+        "backend_full_failed":  "完整模式依赖安装失败。已回退为轻量模式，可稍后通过 hippo doctor --full 切换。",
         "found_memory":         "检测到 {n} 个已有记忆文件（约 {lines} 行有效内容）",
         "no_memory":            "未找到现有记忆文件，已跳过",
         "ask_migrate":          "是否将现有记忆导入 Hippocampus？",
@@ -90,15 +103,16 @@ _L = {
         "ask_disable":          "是否禁用这些 Skill？",
         "disabled":             "已禁用",
         "done":                 "安装完成",
-        "summary":              "导入了 {n} 条记忆 | 禁用了 {m} 个冲突 Skill",
+        "summary":              "后端: {backend} | 导入了 {n} 条记忆 | 禁用了 {m} 个冲突 Skill",
         "press_enter":          "按 Enter 退出...",
     },
     "en": {
         "banner_title":         "Hippocampus Setup Wizard",
         "banner_sub":           "A bionic memory system for AI — layered architecture with vector retrieval",
-        "step_env":             "[1/3] Environment check",
-        "step_skill":           "[2/3] Skill conflict check",
-        "step_migrate":         "[3/3] Import data",
+        "step_env":             "[1/4] Environment check",
+        "step_backend":         "[2/4] Backend selection",
+        "step_skill":           "[3/4] Skill conflict check",
+        "step_migrate":         "[4/4] Import data",
         "py_ok":                "Python {ver} meets requirements",
         "py_too_old":           "Python {ver} is too old (>=3.10 required)",
         "py_ask":               "Python 3.10+ is required to run Hippocampus.",
@@ -115,6 +129,13 @@ _L = {
         "deps_failed":          "Dependency installation failed",
         "found_workspace":      "Found OpenClaw workspace",
         "not_found_workspace":  "No OpenClaw workspace detected (currently only OpenClaw is supported). Please confirm OpenClaw is installed and a workspace is configured.",
+        "backend_title":        "Backend Selection",
+        "backend_lite":         "[1] Lite mode (TF-IDF) — zero extra deps, CJK-aware, best for small collections",
+        "backend_full":         "[2] Full mode (ChromaDB) — semantic vector search, ~300 MB extra deps",
+        "backend_lite_chosen":  "Selected: Lite mode (TF-IDF)",
+        "backend_full_chosen":  "Selected: Full mode (ChromaDB)",
+        "backend_full_install": "Installing ChromaDB + sentence-transformers...",
+        "backend_full_failed":  "Full-mode dependency install failed. Falling back to Lite mode. You can switch later via hippo doctor --full.",
         "found_memory":         "Found {n} existing memory file(s) (~{lines} meaningful lines)",
         "no_memory":            "No existing memory files found, skipped",
         "ask_migrate":          "Import existing memories into Hippocampus?",
@@ -125,7 +146,7 @@ _L = {
         "ask_disable":          "Disable these skills?",
         "disabled":             "Disabled",
         "done":                 "Setup complete",
-        "summary":              "Imported {n} memories | Disabled {m} conflicting skill(s)",
+        "summary":              "Backend: {backend} | Imported {n} memories | Disabled {m} conflicting skill(s)",
         "press_enter":          "Press Enter to exit...",
     },
 }
@@ -228,10 +249,13 @@ def _find_all_skills(workspace: Path) -> list[tuple[str, str | None]]:
 
 @cli.command()
 def install() -> None:
-    """Setup wizard: detect environment, migrate memories, handle skill conflicts."""
+    """Setup wizard: detect environment, pick backend, migrate memories, handle skill conflicts."""
     import sys
     import webbrowser
-    from hippocampus.deps import check_python, check_all, install_missing
+    from hippocampus.deps import (
+        check_python, check_all, check_optional,
+        install_missing, install_optional, REQUIRED, OPTIONAL,
+    )
 
     lang, L = _ask_lang()
 
@@ -245,7 +269,7 @@ def install() -> None:
     print(divider)
     print()
 
-    # ── [1/3] Environment check ─────────────────────────────────────────┐
+    # ── [1/4] Environment check ─────────────────────────────────────
     print(L["step_env"] + "...")
 
     # Python version
@@ -275,16 +299,17 @@ def install() -> None:
                 input("  " + L["press_enter"])
                 sys.exit(1)
 
-    # Dependencies
+    # Core dependencies (click, pyyaml — always required)
     statuses = check_all()
-    missing_deps = [s for s in statuses if not s.ok]
+    missing_core = [s for s in statuses if not s.ok]
     for s in statuses:
         if s.ok:
             print(f" {check_mark} {s.label:30s}  v{s.version}")
         else:
             tag = "missing" if not s.installed else f"too old ({s.version})"
             print(f" {cross_mark} {s.label:30s}  [{tag}]")
-    if missing_deps:
+
+    if missing_core:
         print()
         print(" " + L["deps_ask"])
         print()
@@ -309,14 +334,9 @@ def install() -> None:
             elif c in ("", "2"):
                 print()
                 print("  " + ("请手动安装后重试：" if lang == "zh" else "Install manually and re-run:"))
-                for s in missing_deps:
+                for s in missing_core:
                     pip_name = ""
-                    for imp, pn, _, _ in [
-                        ("click", "click", "8.0", ""),
-                        ("yaml", "pyyaml", "6.0", ""),
-                        ("chromadb", "chromadb", "0.4.0", ""),
-                        ("sentence_transformers", "sentence-transformers", "2.2.0", ""),
-                    ]:
+                    for imp, pn, *_ in REQUIRED:
                         if imp == s.name:
                             pip_name = pn
                             break
@@ -342,7 +362,60 @@ def install() -> None:
 
     print()
 
-    # ── [2/3] Skill conflict check ──────────────────────────────────
+    # ── [2/4] Backend selection ─────────────────────────────────────
+    print(L["step_backend"])
+    print()
+    print(" " + L["backend_title"] + ":")
+    print()
+    print(" " + L["backend_lite"])
+    print(" " + L["backend_full"])
+    print()
+
+    backend = "tfidf"  # default
+    backend_label = "Lite (TF-IDF)"
+    while True:
+        try:
+            c = input("  " + ("选择 [1/2]" if lang == "zh" else "Select [1/2]: ")).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            c = ""
+        if c in ("", "1"):
+            print(f" {check_mark} {L['backend_lite_chosen']}")
+            break
+        elif c == "2":
+            backend = "chroma"
+            backend_label = "Full (ChromaDB)"
+            # Check optional deps
+            opt_status = check_optional()
+            opt_missing = [s for s in opt_status if not s.ok]
+            if opt_missing:
+                print()
+                for s in opt_status:
+                    if s.ok:
+                        print(f" {check_mark} {s.label:30s}  v{s.version}")
+                    else:
+                        tag = "missing" if not s.installed else f"too old ({s.version})"
+                        print(f" {cross_mark} {s.label:30s}  [{tag}]")
+                print()
+                print(" " + L["backend_full_install"])
+                print()
+                if _ask_yn(L, ("是否立即安装？" if lang == "zh" else "Install now?"), default_yes=True):
+                    ok_full = install_optional(dry_run=False)
+                    if not ok_full:
+                        print(f" {cross_mark} {L['backend_full_failed']}")
+                        backend = "tfidf"
+                        backend_label = "Lite (TF-IDF)"
+                else:
+                    print(f" {cross_mark} {L['backend_full_failed']}")
+                    backend = "tfidf"
+                    backend_label = "Lite (TF-IDF)"
+            if backend == "chroma":
+                print(f" {check_mark} {L['backend_full_chosen']}")
+            break
+
+    print()
+
+    # ── [3/4] Skill conflict check ──────────────────────────────────
     print(L["step_skill"])
     all_skills = _find_all_skills(workspace)
 
@@ -377,7 +450,7 @@ def install() -> None:
 
     print()
 
-    # ── [3/3] Import data ───────────────────────────────────────────
+    # ── [4/4] Import data ───────────────────────────────────────────
     print(L["step_migrate"])
 
     memory_files = _find_memory_files(workspace)
@@ -391,8 +464,11 @@ def install() -> None:
             from hippocampus.store import MemoryStore
 
             config_path.parent.mkdir(parents=True, exist_ok=True)
-            if not config_path.exists():
-                config_path.write_text(DEFAULT_CONFIG_YAML, encoding="utf-8")
+            # Write config with chosen backend
+            _yaml = DEFAULT_CONFIG_YAML.replace(
+                'backend: "tfidf"', f'backend: "{backend}"'
+            )
+            config_path.write_text(_yaml, encoding="utf-8")
 
             import_count = 0
             try:
@@ -425,7 +501,7 @@ def install() -> None:
     print(f"{chr(0x2713)} {L['done']}")
     imported_n = locals().get("import_count", 0)
     disabled_n = len(locals().get("disabled", []))
-    print(f" {L['summary'].format(n=imported_n, m=disabled_n)}")
+    print(f" {L['summary'].format(backend=backend_label, n=imported_n, m=disabled_n)}")
     print()
 
 
@@ -574,17 +650,24 @@ def export(ctx, fmt, output) -> None:
 
 @cli.command()
 @click.option(
-    "--install", is_flag=True, default=False,
-    help="Auto-install missing dependencies (skip confirmation)",
+    "--install", "install_flag", is_flag=True, default=False,
+    help="Auto-install missing core dependencies",
 )
 @click.option(
-    "--dry-run", is_flag=True, default=False,
+    "--full", "full_flag", is_flag=True, default=False,
+    help="Check and install Full-mode deps (ChromaDB + embeddings)",
+)
+@click.option(
+    "--dry-run", "dry_run", is_flag=True, default=False,
     help="Check only, do not install",
 )
-def doctor(install_flag, dry_run) -> None:
+def doctor(install_flag, full_flag, dry_run) -> None:
     """Check runtime dependencies and optionally install missing ones."""
     import sys
-    from hippocampus.deps import check_all, check_python, install_missing
+    from hippocampus.deps import (
+        check_all, check_optional, check_python,
+        install_missing, install_optional,
+    )
 
     pass_icon = chr(0x2705)
     fail_icon = chr(0x274C)
@@ -601,7 +684,7 @@ def doctor(install_flag, dry_run) -> None:
     ok_count = sum(1 for s in statuses if s.ok)
     total = len(statuses)
 
-    print(f"\nDependency check ({ok_count}/{total} ok):")
+    print(f"\nCore dependencies ({ok_count}/{total} ok):")
     for s in statuses:
         if s.ok:
             print(f"  {pass_icon} {s.label:30s}  {s.name:22s}  v{s.version}")
@@ -618,7 +701,29 @@ def doctor(install_flag, dry_run) -> None:
         else:
             print("\nInstall the missing packages above.")
     else:
-        print(f"\n{pass_icon} All dependencies ready.")
+        print(f"\n{pass_icon} All core dependencies ready.")
+
+    # Optional (Full-mode) dependencies
+    opt_status = check_optional()
+    opt_ok = sum(1 for s in opt_status if s.ok)
+    opt_total = len(opt_status)
+
+    print(f"\nFull-mode dependencies ({opt_ok}/{opt_total} ok):")
+    for s in opt_status:
+        if s.ok:
+            print(f"  {pass_icon} {s.label:30s}  {s.name:22s}  v{s.version}")
+        else:
+            tag = "missing" if not s.installed else f"too old ({s.version})"
+            print(f"  {fail_icon} {s.label:30s}  {s.name:22s}  [{tag}]")
+
+    if full_flag:
+        if opt_ok < opt_total:
+            print()
+            install_optional(dry_run=False)
+        else:
+            print(f"\n{pass_icon} Full-mode already ready.")
+    elif opt_ok < opt_total and not dry_run:
+        print("\nRun `hippo doctor --full` to install Full-mode deps (ChromaDB + embeddings).")
 
 
 # ── Entry point ─────────────────────────────────────────────────────────
@@ -626,6 +731,13 @@ def doctor(install_flag, dry_run) -> None:
 
 def main() -> None:
     """Entry point for `hippo` console_scripts."""
+    import sys
+    # Force UTF-8 output on Windows (avoids UnicodeEncodeError with emoji).
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
     cli(obj={})
 
 

@@ -22,6 +22,8 @@ import yaml
 # below mirrors its structure so the code is self-documenting.
 DEFAULT_CONFIG_YAML = """\
 # Hippocampus Configuration
+#
+# Backend: "tfidf" (default, zero extra deps) or "chroma" (semantic, needs pip install)
 storage:
   data_dir: "./data"
 short_term:
@@ -29,7 +31,7 @@ short_term:
   compression_threshold: 0.8
   format: "json"
 long_term:
-  backend: "chroma"
+  backend: "tfidf"
   embedding_model: "all-MiniLM-L6-v2"
   top_k: 5
   min_score: 0.0
@@ -64,7 +66,7 @@ class ShortTermConfig:
 
 @dataclass
 class LongTermConfig:
-    backend: str = "chroma"
+    backend: str = "tfidf"  # "tfidf" (Lite) or "chroma" (Full)
     embedding_model: str = "all-MiniLM-L6-v2"
     top_k: int = 5
     min_score: float = 0.0

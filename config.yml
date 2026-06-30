@@ -1,4 +1,4 @@
-# Hippocampus Configuration
+﻿# Hippocampus Configuration
 # ==========================
 # All configurable parameters for the 3-layer memory system.
 
@@ -18,7 +18,7 @@ short_term:
 # --- Long-Term Memory ---
 long_term:
   # Vector database backend: chroma | faiss
-  backend: "chroma"
+  backend: "tfidf"
   # Embedding model name (sentence-transformers)
   embedding_model: "all-MiniLM-L6-v2"
   # Number of results to return by default
@@ -30,7 +30,7 @@ long_term:
 
 # --- Compression ---
 compression:
-  # Strategy for summarizing short-term → long-term
+  # Strategy for summarizing short-term �?long-term
   # Options: simple_concat | llm_summary (future)
   strategy: "simple_concat"
   # Max characters per compressed entry
@@ -54,3 +54,4 @@ trace:
 cli:
   # Default number of results for search
   default_top_k: 5
+

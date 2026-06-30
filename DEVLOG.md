@@ -106,6 +106,51 @@ $ hippo install
   导入了 19 条记忆 | 禁用了 3 个冲突 Skill
 ```
 
+## 2026-06-30 — 双后端架构 (TF-IDF Lite + ChromaDB Full)
+
+### 需求来源
+
+V0.2 的 `deps.py` 硬性要求 `chromadb` + `sentence-transformers`（~300 MB），
+丢掉了 V0.1 的零依赖启动优势。用户反馈后改为**默认轻量、可选完整**的双后端设计。
+
+### 新增：TF-IDF 后端 (`layers/tfidf_backend.py`)
+
+- CJK-aware 分词（单字+bigram，中日韩文字支持）
+- TF-IDF 向量化 + 余弦相似度检索
+- JSON 文件持久化（`tfidf_store.json`）
+- 零额外依赖，适合 <10K 文档规模
+- 中文搜索实测准确（"天气"→0.64，"术力口"→0.55）
+
+### 改动的文件
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `layers/tfidf_backend.py` | **新建** | TF-IDF 轻量向量后端 |
+| `layers/long_term.py` | **重写** | 根据 `config.long_term.backend` 切换 TF-IDF/ChromaDB |
+| `config.py` | 修改 | `long_term.backend` 默认改为 `"tfidf"` |
+| `deps.py` | 修改 | chromadb/sentence-transformers 从 REQUIRED 降为 OPTIONAL；新增 `check_optional()`、`install_optional()` |
+| `pyproject.toml` | 修改 | 去掉 chromadb/sentence-transformers 硬依赖，加入 `[optional-dependencies] full`；修复废弃的 build-backend |
+| `cli.py` | **重写** | install 向导新增 [2/4] 后端选择步骤；修复硬编码 REQUIRED；doctor 新增 `--full` 选项；group callback 跳过 doctor/install 避免触发 ChromaDB 导入 |
+| `store.py` | 修改 | 传递 `backend` 参数给 LongTermMemoryLayer |
+| `__init__.py` | 修改 | 版本号 → 0.2.0 |
+
+### 安装流程变化（4 步）
+
+```
+[1/4] 环境检查 → Python + click/pyyaml
+[2/4] 后端选择 → [1] 轻量 TF-IDF  /  [2] 完整 ChromaDB
+[3/4] Skill 冲突 → 通用扫描 skills/ 目录
+[4/4] 导入数据 → MEMORY.md → Hippocampus
+```
+
+### CLI 变化
+
+- `hippo doctor` — 不再触发 ChromaDB 导入，显示 Lite/Full 两组状态
+- `hippo doctor --full` — 安装 ChromaDB + sentence-transformers
+- `hippo doctor --install` — 仅安装核心依赖
+
+---
+
 ## 2026-06-29 — 源码优化 + 安装向导重构
 
 ### 需求来源

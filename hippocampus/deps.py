@@ -21,9 +21,13 @@ from typing import NamedTuple
 REQUIRED: list[tuple[str, str, str, str]] = [
     ("click",       "click",       "8.0", "CLI framework"),
     ("yaml",        "pyyaml",      "6.0", "YAML config parser"),
-    ("chromadb",    "chromadb",    "0.4.0", "Vector database (long-term)"),
+]
+
+# Optional deps — only needed for "chroma" backend (Full mode).
+OPTIONAL: list[tuple[str, str, str, str]] = [
+    ("chromadb",    "chromadb",    "0.4.0", "Vector database (long-term, Full mode)"),
     ("sentence_transformers", "sentence-transformers",
-     "2.2.0", "Embedding model backend"),
+     "2.2.0", "Embedding model (Full mode)"),
 ]
 
 
@@ -92,6 +96,28 @@ def check_all() -> list[DepStatus]:
     return [check_one(*d) for d in REQUIRED]
 
 
+def check_optional() -> list[DepStatus]:
+    """Return status for every optional dependency (Full mode)."""
+    return [check_one(*d) for d in OPTIONAL]
+
+
+def _install_package_list(pkgs: list[str]) -> bool:
+    """pip install a list of packages. Returns True if all succeeded."""
+    for pkg in pkgs:
+        print(f"  pip install {pkg}…")
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", pkg],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            fail_icon = chr(0x274C)
+            print(f"  {fail_icon} {pkg} install failed: {result.stderr.strip()[-200:]}")
+            return False
+        ok_icon = chr(0x2705)
+        print(f"  {ok_icon} {pkg} installed")
+    return True
+
+
 def install_missing(dry_run: bool = False) -> bool:
     """Install every missing/outdated dependency via pip.
 
@@ -137,30 +163,59 @@ def install_missing(dry_run: bool = False) -> bool:
         print("已取消。")
         return False
 
-    print("\n正在安装，请稍候…")
-    for pkg in pkgs:
-        print(f"  pip install {pkg}…")
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", pkg],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            fail_icon = chr(0x274C)
-            print(f"  {fail_icon} {pkg} 安装失败：{result.stderr.strip()[-200:]}")
-            return False
-        ok_icon = chr(0x2705)
-        print(f"  {ok_icon} {pkg} 安装成功")
+    print("\nInstalling, please wait…")
+    if not _install_package_list(pkgs):
+        return False
 
     # Final verification.
     final = check_all()
     all_ok = all(s.ok for s in final)
     ok_icon = chr(0x2705)
     if all_ok:
-        print(f"\n{ok_icon} 全部依赖就绪。")
+        print(f"\n{ok_icon} All dependencies ready.")
     else:
         still_bad = [s for s in final if not s.ok]
         warn = chr(0x26A0) + chr(0xFE0F)
-        print(f"\n{warn} 仍有 {len(still_bad)} 项未满足：")
+        print(f"\n{warn} Still unsatisfied ({len(still_bad)}):")
         for s in still_bad:
             print(f"  · {s.label}")
+    return all_ok
+
+
+def install_optional(dry_run: bool = False) -> bool:
+    """Install optional dependencies (Full mode: ChromaDB + embeddings).
+
+    Returns True if all optional deps are now satisfied.
+    """
+    statuses = check_optional()
+    missing = [s for s in statuses if not s.ok]
+
+    if not missing:
+        return True
+
+    if dry_run:
+        for s in missing:
+            tag = "not installed" if not s.installed else f"too old ({s.version})"
+            print(f"  · {s.label} — [{tag}]")
+        return False
+
+    pkgs = []
+    for s in missing:
+        for imp, pip_name, *_ in OPTIONAL:
+            if imp == s.name:
+                pkgs.append(pip_name)
+                break
+
+    if not pkgs:
+        return True
+
+    print("\nInstalling Full-mode dependencies…")
+    if not _install_package_list(pkgs):
+        return False
+
+    final = check_optional()
+    all_ok = all(s.ok for s in final)
+    ok_icon = chr(0x2705)
+    if all_ok:
+        print(f"\n{ok_icon} Full-mode dependencies ready.")
     return all_ok

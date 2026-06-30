@@ -1,10 +1,10 @@
 [build-system]
 requires = ["setuptools>=68.0"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "hippocampus-memory"
-version = "0.1.0"
+version = "0.2.0"
 description = "A bionic memory system for AI — layered architecture with vector retrieval"
 authors = [{name = "小狐 (VixieTodd)"}]
 license = {text = "MIT"}
@@ -19,9 +19,13 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "chromadb>=0.4.0",
     "pyyaml>=6.0",
     "click>=8.0",
+]
+
+[project.optional-dependencies]
+full = [
+    "chromadb>=0.4.0",
     "sentence-transformers>=2.2.0",
 ]
 
