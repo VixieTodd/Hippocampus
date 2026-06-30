@@ -178,6 +178,11 @@ def _ask_lang() -> tuple[str, dict]:
 
 
 def _ask_yn(L, prompt_text: str, default_yes: bool = True) -> bool:
+    """Prompt a yes/no question, return True for yes.
+
+    Uses L dict entries for the Y/n prompts and interprets empty input
+    as the default (yes when default_yes=True).
+    """
     prompt = prompt_text + " [Y/n] " if default_yes else " [y/N] "
     try:
         answer = input(prompt).strip().lower()
@@ -202,7 +207,7 @@ def _find_workspace() -> Path | None:
 
 
 def _find_memory_files(workspace: Path) -> list[Path]:
-    """Find memory-related markdown files in the workspace."""
+    """Find memory-related markdown files: MEMORY.md, notes.md, and memory/*.md."""
     files = []
     for name in ("MEMORY.md", "notes.md"):
         f = workspace / name
@@ -215,6 +220,7 @@ def _find_memory_files(workspace: Path) -> list[Path]:
 
 
 def _count_lines(file: Path) -> int:
+    """Count non-empty, non-comment lines in a text file."""
     count = 0
     try:
         for line in file.read_text(encoding="utf-8").splitlines():
@@ -227,6 +233,10 @@ def _count_lines(file: Path) -> int:
 
 
 def _find_all_skills(workspace: Path) -> list[tuple[str, str | None]]:
+    """Scan workspace/skills/ for SKILL.md files and extract their name fields.
+
+    Returns list of (directory_name, skill_name_or_None).
+    """
     """Scan workspace/skills/ for SKILL.md files and read their names."""
     skill_dir = workspace / "skills"
     if not skill_dir.is_dir():
@@ -363,6 +373,8 @@ def install() -> None:
     print()
 
     # ── [2/4] Backend selection ─────────────────────────────────────
+    # User picks Lite (tfidf, zero extra deps) or Full (chroma, semantic).
+    # If Full is chosen, we check+install optional deps automatically.
     print(L["step_backend"])
     print()
     print(" " + L["backend_title"] + ":")
@@ -380,9 +392,11 @@ def install() -> None:
             print()
             c = ""
         if c in ("", "1"):
+            # Lite mode: nothing extra needed, default config already has tfidf.
             print(f" {check_mark} {L['backend_lite_chosen']}")
             break
         elif c == "2":
+            # Full mode: check ChromaDB + sentence-transformers, offer auto-install.
             backend = "chroma"
             backend_label = "Full (ChromaDB)"
             # Check optional deps
@@ -451,6 +465,8 @@ def install() -> None:
     print()
 
     # ── [4/4] Import data ───────────────────────────────────────────
+    # Converts MEMORY.md and memory/*.md files line-by-line into short-term
+    # entries.  Empty lines and comments (starting with # or <!--) are skipped.
     print(L["step_migrate"])
 
     memory_files = _find_memory_files(workspace)

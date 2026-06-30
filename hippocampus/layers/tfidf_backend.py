@@ -92,7 +92,8 @@ class TFIDFBackend:
                          r"\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u3000-\u303f"
                          r"\uff00-\uffef]")
 
-    # Punctuation stripped from tokens.
+    # Punctuation stripped from tokens — covers full-width CJK marks, half-width
+    # ASCII marks, and Chinese-style quotation marks (U+201C/U+201D etc.).
     _PUNCT_RE = re.compile(r"[，。！？、；：""''（）【】《》\s,.!?;:'\"()\[\]{}]+")
 
     @classmethod
@@ -229,14 +230,36 @@ class TFIDFBackend:
     def add_batch(
         self, entries: list[tuple[str, str, dict[str, Any] | None]]
     ) -> list[str]:
-        """Add multiple documents at once.  Faster than calling add() N times.
+        """Add multiple documents at once — significantly faster than N × add().
 
-        Each entry is (doc_id, content, metadata).
+        Each entry is (doc_id, content, metadata).  We defer persistence to the
+        end so the file is only written once.
         """
         ids: list[str] = []
         for doc_id, content, meta in entries:
-            self.add(doc_id, content, meta)
+            meta = meta or {}
+            tokens = self._tokenise(content)
+            tf = self._compute_tf(tokens)
+
+            # Remove old index entries (in case of overwrite).
+            if doc_id in self._doc_terms:
+                for term in self._doc_terms[doc_id]:
+                    self._index.get(term, {}).pop(doc_id, None)
+
+            self._docs[doc_id] = {
+                "id": doc_id,
+                "content": content,
+                "timestamp": meta.get("timestamp", ""),
+                "source": meta.get("source", ""),
+                "parent_id": meta.get("parent_id", ""),
+            }
+            self._doc_terms[doc_id] = tf
+            for term, freq in tf.items():
+                self._index[term][doc_id] = freq
             ids.append(doc_id)
+
+        self._doc_count = len(self._docs)
+        self._save()
         return ids
 
     def search(

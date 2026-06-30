@@ -195,7 +195,8 @@ class MemoryStore:
             ("working", self.working),
         ):
             # Long-term stores metadata dicts; short/working store MemoryEntry.
-            data = layer.get_entry(entry_id)  # type: ignore[arg-type]
+            # Both support get_entry() but return type differs — we normalise here.
+            data: Any = layer.get_entry(entry_id)
             if data is not None:
                 entry_data = (
                     data if isinstance(data, dict)
@@ -217,8 +218,9 @@ class MemoryStore:
 
     def export(self, fmt: str = "json") -> dict:
         """Dump all memories as a single JSON-serialisable structure."""
+        from hippocampus import __version__
         return {
-            "version": "0.1.0",
+            "version": __version__,
             "format": fmt,
             "short_term": self.short_term.export(),
             "long_term": self.long_term.export(),

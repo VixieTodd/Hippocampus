@@ -155,11 +155,11 @@ class Config:
     def to_dict(self) -> dict:
         """Rebuild the nested dict (symmetric with the YAML file)."""
         return {
-            "storage": self.storage.__dict__,
-            "short_term": self.short_term.__dict__,
-            "long_term": self.long_term.__dict__,
-            "compression": self.compression.__dict__,
-            "working": self.working.__dict__,
-            "trace": self.trace.__dict__,
-            "cli": self.cli.__dict__,
+            "storage": {k: v for k, v in self.storage.__dict__.items() if not k.startswith("_")},
+            "short_term": {k: v for k, v in self.short_term.__dict__.items() if not k.startswith("_")},
+            "long_term": {k: v for k, v in self.long_term.__dict__.items() if not k.startswith("_")},
+            "compression": {k: v for k, v in self.compression.__dict__.items() if not k.startswith("_")},
+            "working": {k: v for k, v in self.working.__dict__.items() if not k.startswith("_")},
+            "trace": {k: v for k, v in self.trace.__dict__.items() if not k.startswith("_")},
+            "cli": {k: v for k, v in self.cli.__dict__.items() if not k.startswith("_")},
         }

@@ -101,36 +101,51 @@ class Compressor:
     # ── Strategies ─────────────────────────────────────────────────────
 
     def _concat_block(self, entries: list[MemoryEntry]) -> list[MemoryEntry]:
-        """Group consecutive entries into one summary entry each.
+        """Concatenate a batch of short-term entries into fewer long-term chunks.
 
-        Unlike the old per-entry copy (which was a 1:1 migration, not real
-        compression), this creates a concatenated block per entry, attaching
-        source metadata for traceability.
+        Merges entry content with "\n---\n" separators and splits into chunks
+        of at most ``max_chars`` characters each.  Each chunk becomes one long-term
+        MemoryEntry with traceability metadata pointing back to the original entries.
 
-        Returns one long-term MemoryEntry per input entry (each with the
-        original content truncated to ``max_chars``).  Future strategies
-        like ``llm_summary`` can reduce the count further.
+        Example: 20 short entries × ~50 chars each → 1 chunk (1000 chars ≤ max_chars)
         """
         if not entries:
             return []
 
-        compressed: list[MemoryEntry] = []
+        # Build a combined text with separators.
+        parts: list[str] = []
         for entry in entries:
-            content = entry.content
-            if len(content) > self._max_chars:
-                content = content[:self._max_chars] + "…"
+            content = entry.content.strip()
+            if content:
+                parts.append(content)
 
+        if not parts:
+            return []
+
+        full_text = "\n---\n".join(parts)
+
+        # Split into max_chars chunks.
+        compressed: list[MemoryEntry] = []
+        offset = 0
+        while offset < len(full_text):
+            chunk = full_text[offset:offset + self._max_chars]
+            if offset + self._max_chars < len(full_text):
+                chunk += "…"
+
+            # Collect parent IDs for traceability.
+            parent_ids = [e.id for e in entries if e.content.strip()]
             compressed.append(MemoryEntry(
-                content=content,
+                content=chunk,
                 layer="long_term",
                 source="compressed",
-                parent_id=entry.id,
+                parent_id=parent_ids[0] if parent_ids else None,
                 metadata={
-                    "original_source": entry.source,
-                    "original_timestamp": entry.timestamp,
+                    "original_sources": list(set(e.source for e in entries)),
+                    "original_count": len(entries),
                     "compression_strategy": self._strategy,
-                    "original_length": len(entry.content),
+                    "original_total_chars": len(full_text),
                 },
             ))
+            offset += self._max_chars
 
         return compressed

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from hippocampus.memory import MemoryEntry
 from hippocampus.layers import BaseLayer, SearchResult
@@ -57,6 +56,11 @@ class LongTermMemoryLayer(BaseLayer):
     # ── TF-IDF backend (Lite, default) ──────────────────────────────
 
     def _init_tfidf(self) -> None:
+        """Initialise the zero-dependency TF-IDF backend.
+
+        This is the default path — no ChromaDB or sentence-transformers needed.
+        The backend stores documents inline in ``tfidf_store.json``.
+        """
         from hippocampus.layers.tfidf_backend import TFIDFBackend
 
         self._be_tfidf: "TFIDFBackend" = TFIDFBackend(self._data_dir)

@@ -90,6 +90,9 @@ class ShortTermMemoryLayer(BaseLayer):
             hits = sum(1 for kw in keywords if kw in content_lower)
             if hits == 0:
                 continue
+            # Score formula: base 0.2 bias (entry isn't irrelevant if ANY keyword
+            # matched), plus 0.8 × hit_ratio.  This avoids giving 0.0 to partial
+            # matches while keeping perfect matches at 1.0.
             score = min(1.0, hits / len(keywords) * 0.8 + 0.2)
             results.append(SearchResult(
                 entry_id=entry.id,
