@@ -2,12 +2,16 @@
 Hippocampus CLI — terminal commands for the 3-layer memory system.
 
 Usage:
-  hippo write "content" [--source user|agent|system] [--layer st|lt|wk]
-  hippo search "query" [--top 5] [--layers st,lt,wk]
-  hippo stats
-  hippo compress [--force]
+  hippo write "content" [--source user|agent|system] [--layer st|lt|wk] [--agent-id main]
+  hippo search "query" [--top 5] [--layers st,lt,wk] [--agent-id main]
+  hippo stats [--agent-id main]
+  hippo compress [--force] [--agent-id main]
   hippo trace <id>
   hippo export [--format json] [--output file.json]
+
+V0.4 Multi-Agent: most commands accept ``--agent-id`` for scoping
+operations to a specific agent.  Omit for cross-agent (search) /
+default agent (write).
 """
 
 from __future__ import annotations
@@ -531,12 +535,30 @@ def install() -> None:
     "--layer", default="short_term",
     help="Target layer: short_term (default), working, long_term",
 )
+# ── V0.4: agent_id option ───────────────────────────────────────────
+@click.option(
+    "--agent-id", "agent_id", default=None,
+    help="Agent ID for multi-agent isolation (default: config default, usually 'main')",
+)
 @click.pass_context
-def write(ctx, content, source, layer) -> None:
-    """Write a memory entry."""
+def write(ctx, content, source, layer, agent_id) -> None:
+    """Write a memory entry.
+
+    V0.4: use --agent-id to tag the entry for a specific sub-agent.
+    """
     store = ctx.obj["store"]
-    entry_id = store.write(content, source=source, layer=layer)
-    click.echo(json.dumps({"status": "ok", "id": entry_id, "layer": layer}))
+    entry_id = store.write(
+        content,
+        source=source,
+        layer=layer,
+        agent_id=agent_id,
+    )
+    click.echo(json.dumps({
+        "status": "ok",
+        "id": entry_id,
+        "layer": layer,
+        "agent_id": agent_id or store._default_agent_id,
+    }))
 
 
 # ── search ───────────────────────────────────────────────────────────────
@@ -549,12 +571,22 @@ def write(ctx, content, source, layer) -> None:
     "--layers", default="short_term,long_term,working",
     help="Comma-separated layers to search",
 )
+# ── V0.4: agent_id option ───────────────────────────────────────────
+@click.option(
+    "--agent-id", "agent_id", default=None,
+    help="Scope search to one agent (omit for cross-agent search)",
+)
 @click.pass_context
-def search(ctx, query, top, layers) -> None:
-    """Search memories across layers."""
+def search(ctx, query, top, layers, agent_id) -> None:
+    """Search memories across layers.
+
+    V0.4: use --agent-id to scope to one agent; omit for cross-agent search.
+    """
     store = ctx.obj["store"]
     layer_list = [l.strip() for l in layers.split(",") if l.strip()]
-    results = store.search(query, top_k=top, layers=layer_list)
+    results = store.search(
+        query, top_k=top, layers=layer_list, agent_id=agent_id,
+    )
 
     if not results:
         click.echo(json.dumps({"status": "ok", "results": []}))
@@ -582,11 +614,19 @@ def search(ctx, query, top, layers) -> None:
 
 
 @cli.command()
+# ── V0.4: agent_id option ───────────────────────────────────────────
+@click.option(
+    "--agent-id", "agent_id", default=None,
+    help="Show stats for a specific agent (omit for all-agent breakdown)",
+)
 @click.pass_context
-def stats(ctx) -> None:
-    """Show memory statistics for all layers."""
+def stats(ctx, agent_id) -> None:
+    """Show memory statistics for all layers.
+
+    V0.4: use --agent-id to see per-agent breakdown; omit for global view.
+    """
     store = ctx.obj["store"]
-    s = store.stats()
+    s = store.stats(agent_id=agent_id)
     click.echo(json.dumps(s, ensure_ascii=False, indent=2))
 
 
@@ -598,11 +638,19 @@ def stats(ctx) -> None:
     "--force", is_flag=True, default=False,
     help="Force compression regardless of threshold",
 )
+# ── V0.4: agent_id option ───────────────────────────────────────────
+@click.option(
+    "--agent-id", "agent_id", default=None,
+    help="Compress only this agent's short-term entries (omit for all agents)",
+)
 @click.pass_context
-def compress(ctx, force) -> None:
-    """Trigger memory compression (short-term -> long-term)."""
+def compress(ctx, force, agent_id) -> None:
+    """Trigger memory compression (short-term -> long-term).
+
+    V0.4: by default compresses ALL agents.  Use --agent-id for one agent.
+    """
     store = ctx.obj["store"]
-    result = store.compress(force=force)
+    result = store.compress(force=force, agent_id=agent_id)
     click.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 

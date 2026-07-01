@@ -213,12 +213,15 @@ class TFIDFBackend:
                 if term in self._index:
                     self._index[term].pop(doc_id, None)
 
+        # V0.4: include agent_id in stored metadata for per-agent search filtering.
+        meta = metadata or {}
         self._docs[doc_id] = {
             "id": doc_id,
             "content": content,
-            "timestamp": metadata.get("timestamp", "") if metadata else "",
-            "source": metadata.get("source", "") if metadata else "",
-            "parent_id": metadata.get("parent_id", "") if metadata else "",
+            "timestamp": meta.get("timestamp", ""),
+            "source": meta.get("source", ""),
+            "parent_id": meta.get("parent_id", ""),
+            "agent_id": meta.get("agent_id", "main"),
         }
         self._doc_terms[doc_id] = tf
         for term, freq in tf.items():
@@ -252,6 +255,7 @@ class TFIDFBackend:
                 "timestamp": meta.get("timestamp", ""),
                 "source": meta.get("source", ""),
                 "parent_id": meta.get("parent_id", ""),
+                "agent_id": meta.get("agent_id", "main"),
             }
             self._doc_terms[doc_id] = tf
             for term, freq in tf.items():
@@ -295,6 +299,7 @@ class TFIDFBackend:
         results: list[dict[str, Any]] = []
         for score, doc_id in top:
             doc = self._docs[doc_id]
+            # V0.4: include agent_id in search results for per-agent filtering.
             results.append({
                 "id": doc_id,
                 "content": doc["content"],
@@ -302,6 +307,7 @@ class TFIDFBackend:
                 "timestamp": doc.get("timestamp", ""),
                 "source": doc.get("source", ""),
                 "parent_id": doc.get("parent_id", ""),
+                "agent_id": doc.get("agent_id", "main"),
             })
 
         return results

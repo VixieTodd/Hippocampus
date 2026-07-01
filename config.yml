@@ -1,33 +1,32 @@
 # Hippocampus Configuration
 #
 # Backend: "tfidf" (default, zero extra deps) or "chroma" (semantic, needs pip install)
-
 storage:
   data_dir: "./data"
-
 short_term:
   window_size: 100
   compression_threshold: 0.8
   format: "json"
-
 long_term:
   backend: "tfidf"
   embedding_model: "all-MiniLM-L6-v2"
   top_k: 5
   min_score: 0.0
   collection_name: "hippocampus_long_term"
-
 compression:
   strategy: "simple_concat"
   max_chars: 2000
   batch_size: 20
-
 working:
   entries_file: ""
-
 trace:
   enabled: true
   log_file: "trace.log"
-
 cli:
   default_top_k: 5
+# ── V0.4: Multi-Agent configuration ──────────────────────────────────
+agent:
+  default_agent_id: "main"
+  enable_isolation: true
+  cross_agent_search: true
+  long_term_isolation: false

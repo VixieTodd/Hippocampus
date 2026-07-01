@@ -6,6 +6,8 @@ directory) and controls every tunable parameter: storage paths, window sizes,
 embedding models, compression thresholds, etc.
 
 If no config.yml is found, from_file() creates one with sensible defaults.
+
+V0.4: added ``agent`` section for multi-agent support.
 """
 
 from __future__ import annotations
@@ -20,6 +22,8 @@ import yaml
 # ── Default YAML ──────────────────────────────────────────────────────────
 # This is written out verbatim when no config.yml exists.  Every dataclass
 # below mirrors its structure so the code is self-documenting.
+#
+# V0.4: added ``agent`` section with multi-agent isolation settings.
 DEFAULT_CONFIG_YAML = """\
 # Hippocampus Configuration
 #
@@ -47,6 +51,11 @@ trace:
   log_file: "trace.log"
 cli:
   default_top_k: 5
+agent:
+  default_agent_id: "main"
+  enable_isolation: true
+  cross_agent_search: true
+  long_term_isolation: false
 """
 
 # ── Sub-config dataclasses ────────────────────────────────────────────────
@@ -96,6 +105,37 @@ class CLIConfig:
     default_top_k: int = 5
 
 
+# ── V0.4: Agent config ─────────────────────────────────────────────────
+
+@dataclass
+class AgentConfig:
+    """Multi-agent isolation settings.
+
+    Attributes:
+        default_agent_id:  Fallback agent_id when none is supplied to
+                           write()/search().  Typically ``"main"`` for the
+                           primary session.
+        enable_isolation:  When True, short-term memory is partitioned
+                           per agent_id (each agent gets its own sliding
+                           window).  When False, all agents share one
+                           pool (legacy single-agent behaviour).
+        cross_agent_search: When True, long-term search without an
+                           agent_id filter returns results from ALL agents.
+                           When False, it returns only the requesting
+                           agent's records.  Ignored when long_term_isolation
+                           is True (search always scoped to one agent).
+        long_term_isolation: When True, each agent gets its own independent
+                           long-term collection (separate TF-IDF file or
+                           ChromaDB collection).  When False (default), all
+                           agents share one long-term pool with agent_id
+                           tags for optional filtering.
+    """
+    default_agent_id: str = "main"
+    enable_isolation: bool = True
+    cross_agent_search: bool = True
+    long_term_isolation: bool = False
+
+
 # ── Top-level config ──────────────────────────────────────────────────────
 
 
@@ -110,6 +150,9 @@ class Config:
     working: WorkingConfig = field(default_factory=WorkingConfig)
     trace: TraceConfig = field(default_factory=TraceConfig)
     cli: CLIConfig = field(default_factory=CLIConfig)
+
+    # V0.4: Multi-agent configuration.
+    agent: AgentConfig = field(default_factory=AgentConfig)
 
     # Internally set after from_file() to resolve relative paths.
     _config_path: Optional[Path] = field(default=None, repr=False)
@@ -140,9 +183,10 @@ class Config:
         config._config_path = path
 
         # Walk through each section and overlay values from YAML.
+        # V0.4: agent section added.
         for section in (
             "storage", "short_term", "long_term",
-            "compression", "working", "trace", "cli"
+            "compression", "working", "trace", "cli", "agent"
         ):
             if section in raw and raw[section]:
                 sub = getattr(config, section)
@@ -162,4 +206,5 @@ class Config:
             "working": {k: v for k, v in self.working.__dict__.items() if not k.startswith("_")},
             "trace": {k: v for k, v in self.trace.__dict__.items() if not k.startswith("_")},
             "cli": {k: v for k, v in self.cli.__dict__.items() if not k.startswith("_")},
+            "agent": {k: v for k, v in self.agent.__dict__.items() if not k.startswith("_")},
         }

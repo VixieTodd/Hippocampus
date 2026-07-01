@@ -1,5 +1,63 @@
 # Hippocampus 开发日志
 
+## 2026-07-01 — V0.4 多 Agent 适配（方案B：隔离短期 + 共享长期）
+
+### 改造范围
+
+9 个文件修改 + 1 个新测试文件：
+
+| 文件 | 改动 |
+|---|---|
+| `memory.py` | MemoryEntry 新增 `agent_id` 字段（默认 `"main"`） |
+| `config.py` | 新增 `AgentConfig` 配置段（default_agent_id / enable_isolation / cross_agent_search） |
+| `config.yml` | 新增 `agent:` 节 |
+| `layers/short_term.py` | 内部改为 `dict[agent_id, list[MemoryEntry]]` 分区存储，按 agent 独立窗口 |
+| `layers/long_term.py` | 后端 metadata 存储 agent_id，search() 支持 agent_id 过滤 |
+| `layers/working.py` | 新增 "shared" 命名空间（SHARED_AGENT_ID），agent-specific + shared 双池 |
+| `layers/tfidf_backend.py` | _docs 和 search 结果包含 agent_id |
+| `compressor.py` | compress() 改为按 agent 压缩，compressed entries 继承 agent_id |
+| `store.py` | write/search/compress/stats 全部接受 agent_id 参数 |
+| `cli.py` | write/search/stats/compress 命令新增 `--agent-id` 选项 |
+| `tests/test_v04_multi_agent.py` | 11 个集成测试（分区/搜索/压缩/隔离/兼容） |
+
+### 架构决策
+
+```
+┌─ Agent "main" ─┐  ┌─ Agent "coder" ─┐  ┌─ Agent "reviewer" ─┐
+│  short_term     │  │  short_term      │  │  short_term          │
+│  (独立窗口100条) │  │  (独立窗口100条)  │  │  (独立窗口100条)      │
+└──────┬──────────┘  └──────┬───────────┘  └──────┬───────────────┘
+       │                    │                      │
+       └──── compression ───┴──── per-agent ───────┘
+                            │
+                   ┌────────▼────────┐
+                   │   long_term     │
+                   │   (共享collection│
+                   │   agent_id标签)  │
+                   └────────┬────────┘
+                            │
+              ┌─────────────┼─────────────┐
+              │  working    │  working    │  working  │
+              │  "shared"   │  "coder"   │  "main"   │
+              │  (全局配置)  │  (个人偏好) │  (个人偏好) │
+              └─────────────┴────────────┘
+```
+
+- **短期**：完全隔离，各 Agent 独立滑动窗口
+- **长期**：共享池 + agent_id 标签，可跨 Agent 搜索也可过滤
+- **工作**：shared（全局可见）+ agent 私有（仅该 Agent 可见）
+- **压缩**：按 Agent 分别触发，不交叉混合
+- **向后兼容**：所有 agent_id 默认 "main"，老数据自动兼容
+
+### 关键技术点
+
+- `MemoryEntry.from_dict()` 忽略未知 key → 老序列化数据（无 agent_id）自动默认 "main"
+- 短期记忆单文件序列化，agent 分区在内存中重建，不影响磁盘格式
+- TF-IDF 后端的 agent_id 过滤是后过滤（先搜出候选再筛选），简单高效
+- ChromaDB 后端使用原生 `where` 过滤，性能更优
+
+---
+
 ## 2026-06-22 — install 安装向导
 
 ### 需求来源
